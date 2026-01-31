@@ -29,5 +29,5 @@ jobs:
       env:
         FACEBOOK_BOT_API_KEY: ${{ secrets.FACEBOOK_BOT_API_KEY }}
         FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
-        UPSPLASH_API_KEY: ${{ secrets.UPSPLASH_API_KEY }}
+        UNSPLASH_API_KEY: ${{ secrets.UNSPLASH_API_KEY }}
       run: python main.py
