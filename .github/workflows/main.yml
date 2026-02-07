@@ -29,5 +29,6 @@ jobs:
       env:
         FACEBOOK_BOT_API_KEY: ${{ secrets.FACEBOOK_BOT_API_KEY }}
         FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
+        INSTAGRAM_ACCOUNT_ID: ${{ secrets.INSTAGRAM_ACCOUNT_ID }}
         UNSPLASH_API_KEY: ${{ secrets.UNSPLASH_API_KEY }}
       run: python main.py
