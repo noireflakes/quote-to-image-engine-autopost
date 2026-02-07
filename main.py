@@ -11,6 +11,7 @@ load_dotenv()
 
 FB_TOKEN = os.getenv("FACEBOOK_BOT_API_KEY")
 PAGE_ID = os.getenv("FACEBOOK_PAGE_ID")
+INSTAGRAM_ACCOUNT_ID = os.getenv("INSTAGRAM_ACCOUNT_ID")
 UNSPLASH_KEY = os.getenv("UNSPLASH_API_KEY")
 
 
@@ -77,18 +78,17 @@ def create_image(quote, author, img_url):
         try:
             quote_font = ImageFont.truetype(bold_path, 65)
             author_font = ImageFont.truetype(regular_path, 38)
-            print(f"✓ Loaded fonts: {bold_path}")
+
             break
         except:
             continue
 
     if quote_font is None:
         try:
-
             quote_font = ImageFont.truetype("arial.ttf", 65)
             author_font = ImageFont.truetype("arial.ttf", 38)
         except:
-            print("⚠ Warning: Using default font (text may be small)")
+
             quote_font = ImageFont.load_default()
             author_font = ImageFont.load_default()
 
@@ -142,35 +142,135 @@ def create_image(quote, author, img_url):
 
     final_path = "final_post.jpg"
     img.convert("RGB").save(final_path, quality=95)
-    print(f"✓ Image saved: {final_path}")
+
     return final_path
 
 
 def post_to_facebook(image_path, author):
-    print("Uploading to Facebook...")
 
     url = f"https://graph.facebook.com/v21.0/{PAGE_ID}/photos"
 
     with open(image_path, "rb") as f:
         files = {"source": f}
         payload = {
-            "caption": f"Today's Inspiration ✨ {author} #EchoOfThought #Quotes #Mindset",
+            "caption": f"Today's Inspiration By {author} #EchoOfThought #Quotes #Mindset",
             "access_token": FB_TOKEN,
         }
         r = requests.post(url, data=payload, files=files)
 
     result = r.json()
     if "id" in result:
-        print(f"✓ Success! Post ID: {result['id']}")
+        print(f"✓ Facebook Success! Post ID: {result['id']}")
+        return True
     else:
-        print("✗ Failed:", result)
+        print(f"✗ Facebook Failed: {result}")
+        return False
+
+
+def post_to_instagram(image_path, author):
+
+    if not INSTAGRAM_ACCOUNT_ID:
+        print("✗ Instagram Account ID not found in .env file")
+        return False
+
+    caption = f"Today's Inspiration By {author} ✨\n\n#EchoOfThought #Quotes #Mindset #Motivation #Inspiration #DailyQuotes"
+
+    # First, upload image to a publicly accessible URL or use Facebook's hosting
+    # We'll use Facebook's photo endpoint to host the image temporarily
+    upload_url = f"https://graph.facebook.com/v21.0/{PAGE_ID}/photos"
+
+    with open(image_path, "rb") as f:
+        files = {"source": f}
+        upload_payload = {
+            "published": "false",
+            "access_token": FB_TOKEN,
+        }
+        upload_response = requests.post(upload_url, data=upload_payload, files=files)
+
+    upload_result = upload_response.json()
+
+    if "id" not in upload_result:
+        print(f"✗ Failed to upload image for Instagram: {upload_result}")
+        return False
+
+    # Get the image URL from Facebook
+    photo_id = upload_result["id"]
+    photo_url = f"https://graph.facebook.com/v21.0/{photo_id}?fields=images&access_token={FB_TOKEN}"
+    photo_response = requests.get(photo_url)
+    photo_data = photo_response.json()
+
+    if "images" not in photo_data or len(photo_data["images"]) == 0:
+        print(f"✗ Failed to get image URL: {photo_data}")
+        return False
+
+    image_url = photo_data["images"][0]["source"]
+
+    # Create Instagram media container
+    container_url = f"https://graph.facebook.com/v21.0/{INSTAGRAM_ACCOUNT_ID}/media"
+    container_payload = {
+        "image_url": image_url,
+        "caption": caption,
+        "access_token": FB_TOKEN,
+    }
+
+    container_response = requests.post(container_url, data=container_payload)
+    container_result = container_response.json()
+
+    if "id" not in container_result:
+        print(f"✗ Failed to create Instagram container: {container_result}")
+        return False
+
+    creation_id = container_result["id"]
+
+    time.sleep(2)
+
+    status_url = f"https://graph.facebook.com/v21.0/{creation_id}?fields=status_code&access_token={FB_TOKEN}"
+    max_retries = 10
+
+    for i in range(max_retries):
+        status_response = requests.get(status_url)
+        status_result = status_response.json()
+
+        status_code = status_result.get("status_code")
+
+        if status_code == "FINISHED":
+            print("✓ Container ready!")
+            break
+        elif status_code == "ERROR":
+            print(f"✗ Container error: {status_result}")
+            return False
+        else:
+            print(f"⏳ Waiting for container... ({i+1}/{max_retries})")
+            time.sleep(2)
+
+    publish_url = (
+        f"https://graph.facebook.com/v21.0/{INSTAGRAM_ACCOUNT_ID}/media_publish"
+    )
+    publish_payload = {
+        "creation_id": creation_id,
+        "access_token": FB_TOKEN,
+    }
+
+    publish_response = requests.post(publish_url, data=publish_payload)
+    publish_result = publish_response.json()
+
+    if "id" in publish_result:
+        print(f"✓ Instagram Success! Post ID: {publish_result['id']}")
+        return True
+    else:
+        print(f"✗ Instagram Publish Failed: {publish_result}")
+        return False
 
 
 if __name__ == "__main__":
+
     quote, author, img_url = get_content()
 
     if quote and img_url:
         path = create_image(quote, author, img_url)
-        post_to_facebook(path, author)
+
+        fb_success = post_to_facebook(path, author)
+        ig_success = post_to_instagram(path, author)
+
     else:
         print("✗ Script stopped: Error fetching content.")
